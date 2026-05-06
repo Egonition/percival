@@ -632,7 +632,7 @@ class RaidAutomator {
 				}
 			}
 
-			const battleSettled = Date.now() - this.state.battleScreenSince > 2000;
+			const battleSettled = Date.now() - this.state.battleScreenSince > 500;
 
 			const inBattle = this.state.currentScreen === 'battle' &&
 			                 this.state.hasSeenAutoButton          &&
