@@ -468,11 +468,10 @@ class RaidAutomator {
 			const dataUrl  = canvas.toDataURL('image/png');
 			const filename = `captcha_${Date.now()}.png`;
 
-			await chrome.downloads.download({
-				url:            dataUrl,
-				filename:       `percival/captchas/${filename}`,
-				saveAs:         false,
-				conflictAction: 'uniquify'
+			await this.safeSendMessage({
+				type:     'saveCaptcha',
+				dataUrl:  dataUrl,
+				filename: filename
 			});
 
 			console.log(`📸 Captcha Saved: ${filename}`);

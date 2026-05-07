@@ -174,12 +174,12 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, respond) => {
-  if (msg.type === 'showNotification') {
-    chrome.notifications.create({
-      type:    'basic',
-      iconUrl: 'images/get_started128.png',
-      title:   msg.title,
-      message: msg.message
+  if (msg.type === 'saveCaptcha') {
+    chrome.downloads.download({
+      url:            msg.dataUrl,
+      filename:       `percival/captchas/${msg.filename}`,
+      saveAs:         false,
+      conflictAction: 'uniquify'
     });
     respond({ success: true });
     return true;
