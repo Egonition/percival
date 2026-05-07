@@ -1,4 +1,0 @@
-const CONFIG = {
-    ANTHROPIC_API_KEY: '',
-    CAPSOLVER_API_KEY: ''
-}

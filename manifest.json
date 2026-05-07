@@ -11,7 +11,8 @@
     "webRequest",
     "declarativeContent",
     "bookmarks",
-    "notifications"
+    "notifications",
+    "downloads"
   ],
 
   "host_permissions": [
@@ -29,11 +30,9 @@
       "matches": ["https://game.granbluefantasy.jp/*"],
       "run_at": "document_idle",
       "js": [
-        "config.js",
         "error-suppression.js",
         "drop-data.js",
         "content-inventory.js",
-        "captcha-solver.js",
         "break-manager.js",
         "mouse-simulator.js",
         "raid-automation.js"

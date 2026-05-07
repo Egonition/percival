@@ -39,8 +39,8 @@ class RaidAutomator {
 			autoClickAttempted:    false,
 			hasSeenAutoButton:     false,
 			battleScreenSince:     0,
-      lastTurnSeen:          0,
-      lastTurnChangedAt:     0,
+			lastTurnSeen:          '',
+			lastTurnChangedAt:     0,
 			solvingCaptcha:        false
 		};
 
@@ -64,14 +64,10 @@ class RaidAutomator {
 			HUMAN_DELAY_MAX:    3000,
 		};
 
-		this.breakManager  = new BreakManager({ enableBreaks: false });
-		this.mouse         = new MouseSimulator(this.timing);
-		this.captchaSolver = CONFIG.CAPSOLVER_API_KEY
-			? new CaptchaSolver(CONFIG.CAPSOLVER_API_KEY)
-			: null;
-
-		this.observer = null;
-		this.interval = null;
+		this.breakManager = new BreakManager({ enableBreaks: false });
+		this.mouse        = new MouseSimulator(this.timing);
+		this.observer     = null;
+		this.interval     = null;
 		this.init();
 	}
 
@@ -330,6 +326,8 @@ class RaidAutomator {
 				this.state.hasSeenAutoButton  = false;
 				this.state.autoCombatActive   = false;
 				this.state.autoClickAttempted = false;
+				this.state.lastTurnSeen       = '';
+				this.state.lastTurnChangedAt  = Date.now();
 			}
 
 			if (!this.state.hasSeenAutoButton) this.state.hasSeenAutoButton = true;
@@ -460,20 +458,35 @@ class RaidAutomator {
 	// Captcha
 	// ==========================================================
 
-	async handleCaptchaPopup(retryCount = 0) {
-		if (!this.captchaSolver) {
-			this.updateStatus('Captcha Detected - API Key Required to Auto-Solve.');
-			this.stop();
-			return;
-		}
+	async saveCaptchaImage(imgElement) {
+		try {
+			const canvas    = document.createElement('canvas');
+			canvas.width    = imgElement.naturalWidth  || imgElement.width;
+			canvas.height   = imgElement.naturalHeight || imgElement.height;
+			canvas.getContext('2d').drawImage(imgElement, 0, 0);
 
+			const dataUrl  = canvas.toDataURL('image/png');
+			const filename = `captcha_${Date.now()}.png`;
+
+			await chrome.downloads.download({
+				url:            dataUrl,
+				filename:       `percival/captchas/${filename}`,
+				saveAs:         false,
+				conflictAction: 'uniquify'
+			});
+
+			console.log(`📸 Captcha Saved: ${filename}`);
+		} catch (e) {
+			console.warn('⚠️ Failed to Save Captcha:', e);
+		}
+	}
+
+	async handleCaptchaPopup() {
 		if (this.state.solvingCaptcha) return;
 		this.state.solvingCaptcha = true;
 
-		const MAX_RETRIES = 3;
-
-		console.log('🔐 Access Verification Detected - Attempting Captcha Solve...');
-		this.updateStatus('Solving Captcha...');
+		console.log('🔐 Access Verification Detected...');
+		this.updateStatus('Captcha Detected - Saving Image...');
 
 		try {
 			await this.sleep(800);
@@ -488,39 +501,8 @@ class RaidAutomator {
 				return;
 			}
 
-			const solution = await this.captchaSolver.solve(captchaImg);
-
-			if (solution) {
-				await this.sleep(400 + Math.random() * 300);
-				const submitted = await this.captchaSolver.submitSolution(solution);
-
-				if (submitted) {
-					this.updateStatus('Captcha Submitted - Resuming...');
-					await this.sleep(2000);
-
-					if (!this.hasBlockingPopup().found) {
-						console.log('✅ Captcha Cleared - Automation Resuming.');
-						this.state.solvingCaptcha = false;
-						return;
-					}
-
-					if (retryCount < MAX_RETRIES) {
-						console.warn(`⚠️ Retrying Captcha... (${retryCount + 1}/${MAX_RETRIES})`);
-						this.state.solvingCaptcha = false;
-						await this.sleep(1000);
-						await this.handleCaptchaPopup(retryCount + 1);
-						return;
-					}
-
-					console.warn('❌ Max Retries Reached - Pausing Automation.');
-					this.updateStatus('Captcha Failed After 3 Attempts - Manual Input Required.');
-					this.stop();
-					return;
-				}
-			}
-
-			console.warn('❌ Could Not Solve Captcha - Pausing Automation.');
-			this.updateStatus('Captcha Solve Failed - Manual Input Required.');
+			await this.saveCaptchaImage(captchaImg);
+			this.updateStatus('Captcha Saved - Manual Input Required.');
 			this.stop();
 
 		} catch (error) {
@@ -619,6 +601,25 @@ class RaidAutomator {
 				return;
 			}
 
+			// Track Turn Progress
+			if (this.state.autoCombatActive && this.state.currentScreen === 'battle') {
+				const turnEl      = document.querySelector('#js-turn-num-count');
+				const currentTurn = turnEl?.textContent?.trim() || '';
+
+				if (currentTurn !== this.state.lastTurnSeen) {
+					this.state.lastTurnSeen      = currentTurn;
+					this.state.lastTurnChangedAt = Date.now();
+				} else if (Date.now() - this.state.lastTurnChangedAt > 30000) {
+					console.warn('⚠️ Turn Counter Stale - Reloading...');
+					this.updateStatus('Battle Stuck - Reloading...');
+					this.state.autoCombatActive  = false;
+					this.state.lastTurnSeen      = '';
+					this.state.lastTurnChangedAt = 0;
+					setTimeout(() => window.location.reload(), 500);
+					return;
+				}
+			}
+
 			const now = Date.now();
 			if (now - this.state.lastCheck < 500) return;
 			this.state.lastCheck = now;
@@ -658,25 +659,6 @@ class RaidAutomator {
 					await this.clickAutoCombat(autoButton);
 				}
 			}
-
-      // Track Turn Progress
-      if (this.state.autoCombatActive && this.state.currentScreen === 'battle') {
-        const turnEl      = document.querySelector('#js-turn-num-count');
-        const currentTurn = turnEl?.textContent?.trim() || '';
-
-        if (currentTurn !== this.state.lastTurnSeen) {
-          this.state.lastTurnSeen      = currentTurn;
-          this.state.lastTurnChangedAt = Date.now();
-        } else if (Date.now() - this.state.lastTurnChangedAt > 30000) {
-          console.warn('⚠️ Turn Counter Stale - Reloading...');
-          this.updateStatus('Battle Stuck - Reloading...');
-          this.state.autoCombatActive  = false;
-          this.state.lastTurnSeen      = '';
-          this.state.lastTurnChangedAt = 0;
-          setTimeout(() => window.location.reload(), 500);
-          return;
-        }
-      }
 		} finally {
 			this.state.checkingButtons = false;
 		}
@@ -729,7 +711,8 @@ class RaidAutomator {
 		await this.mouse.applyMicroAdjust(x, y);
 
 		const clicked = await this.mouse.performSingleReliableClick(button, x, y, 'Auto Combat');
-		this.state.autoCombatActive = true;
+		this.state.autoCombatActive  = true;
+		this.state.lastTurnChangedAt = Date.now();
 		this.state.totalClicks++;
 		this.updateStatus(clicked ? 'Auto Combat Enabled' : 'Auto Combat Enabled.');
 	}
@@ -747,7 +730,8 @@ class RaidAutomator {
 		}
 
 		await this.mouse.simulateHumanClick(button, 'Quick Attack', () => this.hasBlockingPopup().found);
-		this.state.autoCombatActive = true;
+		this.state.autoCombatActive  = true;
+		this.state.lastTurnChangedAt = Date.now();
 		this.state.totalClicks++;
 		this.updateStatus('Quick Attack Used - Waiting for Completion');
 
@@ -761,77 +745,77 @@ class RaidAutomator {
 	// Element Finders
 	// ==========================================================
 
-  findQuestStartButton() {
-    if (!this.isPageLoaded()) return null;
+	findQuestStartButton() {
+		if (!this.isPageLoaded()) return null;
 
-    const deckContainer  = document.querySelector('.prt-btn-deck');
-    const questContainer = document.querySelector('.prt-set-quest');
+		const deckContainer  = document.querySelector('.prt-btn-deck');
+		const questContainer = document.querySelector('.prt-set-quest');
 
-    const b1 = deckContainer?.querySelector('.btn-usual-ok.se-quest-start');
-    const b2 = deckContainer?.querySelector('.btn-usual-ok.btn-silent-se');
-    const b3 = questContainer?.querySelector('.btn-quest-start.multi.se-quest-start');
+		const b1 = deckContainer?.querySelector('.btn-usual-ok.se-quest-start');
+		const b2 = deckContainer?.querySelector('.btn-usual-ok.btn-silent-se');
+		const b3 = questContainer?.querySelector('.btn-quest-start.multi.se-quest-start');
 
-    if (b1 && this.isVisible(b1)) return b1;
-    if (b2 && this.isVisible(b2)) return b2;
-    if (b3 && this.isVisible(b3)) return b3;
+		if (b1 && this.isVisible(b1)) return b1;
+		if (b2 && this.isVisible(b2)) return b2;
+		if (b3 && this.isVisible(b3)) return b3;
 
-    return null;
-  }
+		return null;
+	}
 
 	findAttackButton() {
-    if (!this.isPageLoaded()) return null;
+		if (!this.isPageLoaded()) return null;
 
-    const container = document.querySelector('#cnt-raid-information');
-    const btn       = container?.querySelector('.btn-attack-start');
-    return btn && this.isVisible(btn) ? btn : null;
-  }
+		const container = document.querySelector('#cnt-raid-information');
+		const btn       = container?.querySelector('.btn-attack-start');
+		return btn && this.isVisible(btn) ? btn : null;
+	}
 
 	findAutoButton() {
-    if (!this.isPageLoaded()) return null;
+		if (!this.isPageLoaded()) return null;
 
-    const container = document.querySelector('.cnt-raid');
-    const btn       = container?.querySelector('.btn-auto');
-    return btn && this.isVisible(btn) ? btn : null;
-  }
+		const container = document.querySelector('.cnt-raid');
+		const btn       = container?.querySelector('.btn-auto');
+		return btn && this.isVisible(btn) ? btn : null;
+	}
 
 	findDeadBoss() {
-    if (!this.isPageLoaded()) return false;
+		if (!this.isPageLoaded()) return false;
 
-    const hpElement = document.getElementById('enemy-hp0');
-    return hpElement && hpElement.textContent.trim() === '0';
-  }
+		const hpElement = document.getElementById('enemy-hp0');
+		return hpElement && hpElement.textContent.trim() === '0';
+	}
 
 	findDismissablePopup() {
-    if (!this.isPageLoaded()) return false;
+		if (!this.isPageLoaded()) return false;
 
-    const popup = document.querySelector('.pop-usual');
-    if (!popup) return false;
+		const popup = document.querySelector('.pop-usual');
+		if (!popup) return false;
 
-    const isBattleEnded = !!popup.querySelector('.txt-rematch-fail');
-    const isExpGained   = popup.querySelector('.prt-popup-header')?.textContent?.trim() === 'EXP Gained';
+		const isBattleEnded = !!popup.querySelector('.txt-rematch-fail');
+		const isExpGained   = popup.querySelector('.prt-popup-header')?.textContent?.trim() === 'EXP Gained';
 
-    return isBattleEnded || isExpGained;
-  }
+		return isBattleEnded || isExpGained;
+	}
 
 	findPopupButton() {
-    if (!this.isPageLoaded()) return null;
+		if (!this.isPageLoaded()) return null;
 
-    const popup = document.querySelector('.pop-usual');
-    if (!popup) return null;
+		const popup = document.querySelector('.pop-usual');
+		if (!popup) return null;
 
-    const isBattleEnded = !!popup.querySelector('.txt-rematch-fail');
-    const isExpGained   = popup.querySelector('.prt-popup-header')?.textContent?.trim() === 'EXP Gained';
+		const isBattleEnded = !!popup.querySelector('.txt-rematch-fail');
+		const isExpGained   = popup.querySelector('.prt-popup-header')?.textContent?.trim() === 'EXP Gained';
 
-    if (!isBattleEnded && !isExpGained) return null;
+		if (!isBattleEnded && !isExpGained) return null;
 
-    const btn = popup.querySelector('.btn-usual-ok, .btn-usual-close');
-    return btn && this.isVisible(btn) ? btn : null;
-  }
+		const btn = popup.querySelector('.btn-usual-ok, .btn-usual-close');
+		return btn && this.isVisible(btn) ? btn : null;
+	}
 
-  isPageLoaded() {
-    const contents = document.querySelector('.contents');
-    return contents && contents.style.display !== 'none';
-  }
+	isPageLoaded() {
+		const contents = document.querySelector('.contents');
+		return contents && contents.style.display !== 'none';
+	}
 
 	isVisible(element) {
 		if (!element) return false;

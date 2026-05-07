@@ -184,49 +184,4 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     respond({ success: true });
     return true;
   }
-
-  if (msg.type === 'solveCaptcha') {
-    console.log('🔐 Service Worker: Received Captcha Solve Request');
-    const tabId = sender.tab.id;
-
-    // Submit Captcha Task
-    fetch('https://api.capsolver.com/createTask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        clientKey: msg.apiKey,
-        task: {
-          type:      'ImageToTextTask',
-          body:      msg.image,
-          module:    'common',
-          score:     0.8,
-          case:      true
-        }
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
-      console.log('🔐 Service Worker: CapSolver Response:', data);
-
-      if (data.errorId !== 0) {
-        console.error('❌ CapSolver Error:', data.errorDescription);
-        chrome.tabs.sendMessage(tabId, { type: 'captchaSolution', solution: null });
-        return;
-      }
-
-      const solution = data.solution?.text || null;
-      console.log('🔐 Service Worker: Solution:', solution);
-
-      chrome.tabs.sendMessage(tabId, {
-        type:     'captchaSolution',
-        solution: solution
-      });
-    })
-    .catch(error => {
-      console.error('❌ Service Worker CapSolver Fetch Failed:', error);
-      chrome.tabs.sendMessage(tabId, { type: 'captchaSolution', solution: null });
-    });
-
-    return true;
-  }
 });

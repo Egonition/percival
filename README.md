@@ -26,15 +26,15 @@ It operates entirely client-side as a Chromium extension.
 - Optional reload triggers (attack / summon events)
 - Configurable timing and input simulation
 
+### Captcha Handling
+- Automatic detection of access verification popups
+- Captcha images are saved locally to `percival/captchas/` in your downloads folder for training data collection
+- Automation pauses on captcha detection and prompts for manual input
+
 ### Farm Routing
 - Redirects to a user-defined farming location
 - Uses a browser bookmark named `farm` as a routing reference
 - Enables continuous farming loops between sessions
-
-### Captcha Handling
-- Optional captcha resolution system
-- Requires external API key configuration in `config.js`
-- Disabled by default until configured
 
 ### Drop Tracking
 - Logs and tracks in-game item drops
@@ -69,18 +69,6 @@ chrome://extensions/
 
 ## Configuration
 
-### Captcha Solver (Optional)
-
-Open `config.js` and set your API key:
-
-```js
-const CAPTCHA_API_KEY = "YOUR_API_KEY_HERE";
-```
-
-If not configured, captcha features remain disabled.
-
----
-
 ### Farm Redirect Setup
 
 Create a browser bookmark named:
@@ -102,7 +90,8 @@ Percival will use it as the redirect target.
 - scripting — content injection  
 - webRequest — network monitoring  
 - bookmarks — farm routing system  
-- notifications — optional alerts  
+- notifications — optional alerts
+- downloads — captcha image saving
 
 ---
 
@@ -112,9 +101,7 @@ Percival will use it as the redirect target.
 Percival/
 ├── manifest.json
 ├── service-worker.js
-├── config.js
 ├── raid-automation.js
-├── captcha-solver.js
 ├── drop-data.js
 ├── content-inventory.js
 ├── break-manager.js
@@ -138,9 +125,9 @@ Percival/
 
 - Requires Chromium-based browser (Chrome, Edge, Brave)
 - Designed for Granblue Fantasy web client
-- Captcha solver requires external API configuration
 - Farm routing depends on a bookmark named `farm`
 - All automation runs locally in the browser
+- Captcha images are saved to `Downloads/percival/captchas/` for manual labeling and model training
 
 ---
 
