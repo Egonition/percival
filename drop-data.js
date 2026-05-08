@@ -48,7 +48,6 @@ const DROP_DATA = [
         { id: 215, name: "Eternity Sand"},
         { id: 202, name: "Damascus Grain"},
         { id: 203, name: "Damascus Crystal"},
-        { id: 20005, name: "Damascus Bar"},
         { id: 20004, name: "Gold Brick"},
         { id: 6513, name: "Terra Adamant"}
         ]
