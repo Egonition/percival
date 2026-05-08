@@ -608,7 +608,7 @@ class RaidAutomator {
 				if (currentTurn !== this.state.lastTurnSeen) {
 					this.state.lastTurnSeen      = currentTurn;
 					this.state.lastTurnChangedAt = Date.now();
-				} else if (Date.now() - this.state.lastTurnChangedAt > 30000) {
+				} else if (Date.now() - this.state.lastTurnChangedAt > 60000) {
 					console.warn('⚠️ Turn Counter Stale - Reloading...');
 					this.updateStatus('Battle Stuck - Reloading...');
 					this.state.autoCombatActive  = false;
